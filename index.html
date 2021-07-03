@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="pt">
+
+<head>
+  <!-- Required meta tags -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/css/bootstrap.min.css"
+    integrity="sha384-GJzZqFGwb1QTTN6wy59ffF1BuGJpLSa9DkKMp0DgiMDm4iYMj70gZWKYbI706tWS" crossorigin="anonymous">
+
+  <!-- Optional JavaScript -->
+  <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+  <script src="https://code.jquery.com/jquery-3.3.1.js" crossorigin="anonymous"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/js/bootstrap.min.js" crossorigin="anonymous"></script>
+
+  <!-- autoNumeric -->
+  <script src="https://cdn.jsdelivr.net/npm/autonumeric@4.5.4"></script>
+
+  <style type="text/css">
+    /* tbody:nth-child(even) {
+      background-color: #e4f5f0;
+    }
+
+    tbody:nth-child(odd) {
+      background-color: #e4f0f5;
+    } */
+
+    .invalid-steel {
+      background-color: pink;
+    }
+
+    .invalid-value {
+      color: red;
+    }
+  </style>
+
+  <script>
+    function renderTable(table, data) {
+      const thead = $('<thead>').appendTo(table);
+      const tcols = $('<tr>').appendTo(thead);
+
+      $('<th>').attr('scope', 'col').text('#').appendTo(tcols);
+      data.columns.forEach((cname) => {
+        $('<th>').attr('scope', 'col').text(cname).appendTo(tcols);
+      });
+
+      data.rows.forEach((steel) => {
+        const tbody = $('<tbody>').appendTo(table);
+        const first_row = $('<tr>').appendTo(tbody);
+        $('<th>')
+          .attr({ scope: 'col', rowspan: 2 })
+          .css({
+            'vertical-align': 'middle',
+            'text-align': 'center'
+          })
+          .text(steel.code)
+          .appendTo(first_row);
+
+        const second_row = $('<tr>').appendTo(tbody);
+        data.columns.forEach((cname) => {
+          const info = steel.info[cname];
+          info.min_element = $('<td>').text(info.min || '-').appendTo(first_row);
+          info.max_element = $('<td>').text(info.max || '-').appendTo(second_row);
+        });
+
+        steel.row_element = tbody;
+      });
+    }
+
+    function renderForm(table, form, data) {
+      const numericOptions = {
+        currencySymbolPlacement: "p",
+        decimalCharacter: ",",
+        decimalCharacterAlternative: ".",
+        digitGroupSeparator: ".",
+        negativePositiveSignPlacement: "r",
+        decimalPlaces: 3,
+      };
+
+      const filterData = {};
+      data.columns.forEach((cname) => {
+        const inputID = `input-${cname}`;
+
+        const input = $('<input>').attr({ class: 'form-control form-control-sm', id: inputID });
+        const an = new AutoNumeric(input.get(0), numericOptions);
+        input.on('change', () => {
+          if (an.rawValue === '') {
+            delete filterData[cname];
+          } else {
+            filterData[cname] = an.getNumber();
+          }
+
+          data.rows.forEach((steel) => {
+            steel.match_count = 0;
+            let validSteel = true;
+
+            data.columns.forEach((cname) => {
+              const value = filterData[cname];
+              const info = steel.info[cname];
+              if (value === undefined) {
+                info.min_element.removeClass('invalid-value');
+                info.max_element.removeClass('invalid-value');
+                steel.match_count++;
+                return;
+              }
+
+              let validColumn = true;
+
+              if (info.min !== undefined) {
+                if (value < info.min) {
+                  info.min_element.addClass('invalid-value');
+                  validColumn = false;
+                  validSteel = false;
+                } else {
+                  info.min_element.removeClass('invalid-value');
+                }
+              }
+
+              if (info.max !== undefined) {
+                if (value > info.max) {
+                  info.max_element.addClass('invalid-value');
+                  validColumn = false;
+                  validSteel = false;
+                } else {
+                  info.max_element.removeClass('invalid-value');
+                }
+              }
+
+              if (validColumn) {
+                steel.match_count++;
+              }
+            });
+
+            if (validSteel) {
+              steel.row_element.removeClass('invalid-steel');
+            } else {
+              steel.row_element.addClass('invalid-steel');
+            }
+          });
+
+          // Sort rows
+          data.rows.sort((a, b) => b.match_count - a.match_count);
+
+          // Recreate table
+          $('tbody', table).detach();
+          data.rows.forEach(steel => steel.row_element.appendTo(table));
+        });
+
+        const row = $('<div>')
+          .attr('class', 'form-group row')
+          .appendTo(form);
+
+        $('<label>')
+          .attr({ 'class': 'col-sm-2 col-form-label col-form-label-sm', for: inputID })
+          .text(cname)
+          .appendTo(row);
+
+        $('<div>')
+          .attr('class', 'col-sm-10')
+          .appendTo(row)
+          .append(input);
+      });
+    }
+
+    function specsLoaded(data) {
+      const form = $('#measurements-form');
+      const table = $('#table');
+
+      renderTable(table, data);
+      renderForm(table, form, data);
+    }
+
+    function init() { $.getJSON('specs.json', specsLoaded); }
+  </script>
+</head>
+
+<body onload="init()">
+  <div class="container-fluid mt-5">
+    <div class="row">
+      <div class="col-sm-3">
+        <div class="card">
+          <div class="card-header">Measurements</div>
+          <div class="card-body">
+            <form id="measurements-form"></form>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-9">
+        <div class="card">
+          <div class="card-header">Results</div>
+          <div class="card-body">
+            <table id="table" class="table table-sm">
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>
